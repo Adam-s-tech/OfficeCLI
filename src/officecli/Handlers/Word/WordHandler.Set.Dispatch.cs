@@ -166,7 +166,10 @@ public partial class WordHandler
         }
         else
         {
+            // #452: keep an embedded chart workbook in step with the data.
+            var embeddedData = Core.ChartEmbeddedDataSync.Capture(chartInfo.StandardPart!);
             unsupported.AddRange(Core.ChartHelper.SetChartProperties(chartInfo.StandardPart!, chartProps));
+            Core.ChartEmbeddedDataSync.Restore(chartInfo.StandardPart!, embeddedData);
         }
         SaveDoc();
         return unsupported;
