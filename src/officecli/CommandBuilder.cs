@@ -1644,24 +1644,23 @@ static partial class CommandBuilder
                 }
             }
 
-            // Pattern 3 (BUG-BT-R6): common typos for the `--prop` option name.
-            // `--props '{"k":"v"}'` is silently swallowed by System.CommandLine
-            // because `--props` (with trailing s) is not a known option, so the
-            // JSON value goes into UnmatchedTokens too. Catch the typo so the
-            // existing warning machinery emits a clear hint instead of letting
-            // the agent ship a shape with no text.
-            if (token is "--props" or "-props" or "--prop=" && i + 1 < tokens.Count)
-            {
-                var nextToken = tokens[i + 1];
-                if (!nextToken.StartsWith("--"))
-                {
-                    result.Add($"--prop {nextToken}");
-                    i++;
-                    continue;
-                }
-            }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Example --prop flags for a value passed to the mistyped `--props`:
+    /// "k=v,k2=v2" becomes "--prop k=v --prop k2=v2"; anything else (a JSON
+    /// object, a value that itself contains a comma) gets a generic example.
+    /// </summary>
+    private static string PropsTypoSuggestion(string? value)
+    {
+        const string generic = "--prop key=value --prop key2=value2";
+        if (string.IsNullOrWhiteSpace(value) || value.TrimStart().StartsWith('{')) return generic;
+        var segments = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 && segments.All(s => s.IndexOf('=') > 0)
+            ? string.Join(" ", segments.Select(s => $"--prop {s}"))
+            : generic;
     }
 
     /// <summary>
@@ -1683,12 +1682,24 @@ static partial class CommandBuilder
         {
             var token = tokens[i];
             if (token == "--") break;                       // explicit passthrough separator
+            // `--props` is not an option: System.CommandLine leaves it and its
+            // value unmatched, so every property in it would be dropped and the
+            // command would go on without them (BUG-BT-R6).
+            if (token is "--props" or "-props" or "--prop=")
+            {
+                var propsValue = i + 1 < tokens.Count && !tokens[i + 1].StartsWith("--") ? tokens[i + 1] : null;
+                throw new OfficeCli.Core.CliException($"Unrecognized option '{token}'.")
+                {
+                    Code = "invalid_argument",
+                    Suggestion = $"Pass each property with its own --prop, e.g. {PropsTypoSuggestion(propsValue)}"
+                };
+            }
             if (!token.StartsWith("--") || token.Length <= 2) continue;
             var key = token[2..];
             if (key.Contains('='))                          // --key=value form
                 key = key[..key.IndexOf('=')];
             if (claimedKeys.Contains(key)) continue;        // already warned as missing --prop
-            if (key is "props" or "prop") continue;         // typo forms handled above
+            if (key is "prop") continue;                    // bare --prop: left to the parser
             var valueHint = i + 1 < tokens.Count && !tokens[i + 1].StartsWith("--")
                 ? $"{key}={tokens[i + 1]}"
                 : $"{key}=<value>";
