@@ -1619,6 +1619,14 @@ static partial class CommandBuilder
         {
             var token = tokens[i];
 
+            // The value of a mistyped `--props` is reported with that option's
+            // error (RejectUnknownOptionTokens), not as a bare property.
+            if (token is "--props" or "-props" or "--prop=")
+            {
+                if (i + 1 < tokens.Count && !tokens[i + 1].StartsWith("--")) i++;
+                continue;
+            }
+
             // Pattern 1: bare key=value (e.g. "text=Hello")
             if (System.Text.RegularExpressions.Regex.IsMatch(token, @"^[A-Za-z_.][A-Za-z0-9_.]*=.+$"))
             {
