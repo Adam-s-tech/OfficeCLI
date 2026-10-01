@@ -3848,14 +3848,10 @@ public partial class PowerPointHandler
                         new Drawing.Blip { Embed = relId },
                         new Drawing.Stretch(new Drawing.FillRectangle())
                     );
-                    // CT_TableCellProperties order is
-                    // lnL/lnR/lnT/lnB/lnTlToBr/lnBlToTr → cell3D → fill group →
-                    // extLst, so the fill goes before extLst — appending is only
-                    // correct while no extLst is present, and appending past a
-                    // cell3D would be wrong the other way round.
-                    var extLst = tcPr.GetFirstChild<Drawing.ExtensionList>();
-                    if (extLst != null) tcPr.InsertBefore(blipFill, extLst);
-                    else tcPr.Append(blipFill);
+                    // CONSISTENCY(cell-fill-schema-order): same placement as
+                    // the solid/gradient fill arm.
+                    tcPr.Append(blipFill);
+                    SchemaOrder.Place(tcPr, blipFill);
                     break;
                 }
                 case "image":

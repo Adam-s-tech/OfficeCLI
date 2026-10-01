@@ -50,11 +50,12 @@ public partial class ExcelHandler
                 var chartCount = part.DrawingsPart != null ? CountExcelCharts(part.DrawingsPart) : 0;
                 sheetNode.ChildCount = rowCount + chartCount;
 
-                // Keep the root sheet overview at depth 0; deeper requests
-                // consume one level for the sheet and one for its children.
+                // The sheets themselves are the root's depth-1 children; their
+                // rows/cells only appear from depth 2, at the same depth a
+                // direct `get /<Sheet>` would use for them.
                 if (depth > 1 && sheetData != null)
                 {
-                    sheetNode.Children = GetSheetChildNodes(name, sheetData, depth - 2, part);
+                    sheetNode.Children = GetSheetChildNodes(name, sheetData, depth - 1, part);
                     // Children omit value-less empty cells/rows (issue #149);
                     // reflect the actual listed count, not the raw row count.
                     sheetNode.ChildCount = sheetNode.Children.Count;
@@ -451,7 +452,7 @@ public partial class ExcelHandler
 
             if (depth > 0)
             {
-                sheetNode.Children = GetSheetChildNodes(sheetNameFromPath, data, depth - 1, worksheet);
+                sheetNode.Children = GetSheetChildNodes(sheetNameFromPath, data, depth, worksheet);
                 // Children omit value-less empty cells/rows (issue #149);
                 // reflect the actual listed count, not the raw row count.
                 sheetNode.ChildCount = sheetNode.Children.Count;
