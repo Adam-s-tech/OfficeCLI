@@ -340,7 +340,7 @@ public partial class PowerPointHandler
 
         // If this preset has a known multi-guide definition, always emit the
         // full guide set so PowerPoint accepts the authored avLst.
-        if (preset != null && MultiGuidePresetDefaults.TryGetValue(preset.Value, out var defaults))
+        if (preset != null && TryGetMultiGuideDefaults(preset.Value, out var defaults))
         {
             foreach (var (name, defFmla) in defaults)
             {
@@ -378,48 +378,24 @@ public partial class PowerPointHandler
     }
 
     /// <summary>
-    /// Authoritative full adjust-guide set for presets whose ECMA-376
-    /// presetShapeDefinition declares MORE THAN ONE adjust guide. Maps the
-    /// preset to its ordered (guide name → default formula) list. Real
+    /// The full (guide name → default formula) set of a preset whose ECMA-376
+    /// presetShapeDefinition declares MORE THAN ONE adjust guide. Real
     /// PowerPoint rejects (0x80070570) an avLst that contains a subset of a
     /// multi-guide preset's guides, so when the user authors an `adj=...` on
     /// any of these we must emit the complete set, filling unspecified guides
-    /// with these defaults. Formulas use the ECMA-376 default values; the
-    /// star adjust handles are the literal `<a:gd … fmla="val N"/>` defaults
-    /// from the spec's presetShapeDefinitions. Single-guide presets are
-    /// deliberately ABSENT — they round-trip fine as a lone `adj`.
+    /// with these defaults. Single-guide presets return false — they
+    /// round-trip fine as a lone `adj`.
     /// </summary>
-    private static readonly IReadOnlyDictionary<Drawing.ShapeTypeValues, (string Name, string Fmla)[]>
-        MultiGuidePresetDefaults = new Dictionary<Drawing.ShapeTypeValues, (string, string)[]>
+    private static bool TryGetMultiGuideDefaults(Drawing.ShapeTypeValues preset, out (string Name, string Fmla)[] guides)
+    {
+        if (PresetAdjustGuides.TryGetValue(PresetName(preset), out var all) && all.Length > 1)
         {
-            [Drawing.ShapeTypeValues.Hexagon] = new[]
-            {
-                ("adj", "val 25000"),
-                ("vf", "val 115470"),
-            },
-            [Drawing.ShapeTypeValues.Star5] = new[]
-            {
-                ("adj", "val 19098"),
-                ("hf", "val 105146"),
-                ("vf", "val 110557"),
-            },
-            [Drawing.ShapeTypeValues.Star6] = new[]
-            {
-                ("adj", "val 28868"),
-                ("hf", "val 115470"),
-            },
-            [Drawing.ShapeTypeValues.Star7] = new[]
-            {
-                ("adj", "val 34601"),
-                ("hf", "val 102572"),
-                ("vf", "val 105210"),
-            },
-            [Drawing.ShapeTypeValues.Star10] = new[]
-            {
-                ("adj", "val 42533"),
-                ("hf", "val 105146"),
-            },
-        };
+            guides = all;
+            return true;
+        }
+        guides = System.Array.Empty<(string, string)>();
+        return false;
+    }
 
     /// <summary>
     /// Map the adjust-handle name at <paramref name="index"/> to the name the
@@ -470,7 +446,7 @@ public partial class PowerPointHandler
             gd.Remove();
         }
         if (kept.Count == 0) return;
-        if (MultiGuidePresetDefaults.TryGetValue(preset, out var defaults))
+        if (TryGetMultiGuideDefaults(preset, out var defaults))
         {
             foreach (var (n, defFmla) in defaults)
                 avLst.AppendChild(new Drawing.ShapeGuide { Name = n, Formula = kept.TryGetValue(n, out var f) ? f : defFmla });
