@@ -158,10 +158,17 @@ public partial class ExcelHandler : IDocumentHandler, Rendering.IRenderModelHost
                     .Where(n => !string.IsNullOrEmpty(n)) ?? Enumerable.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase);
         }
-        catch (DocumentFormat.OpenXml.Packaging.OpenXmlPackageException ex)
+        catch (Exception ex)
         {
-            throw new InvalidOperationException(
-                $"Cannot open {Path.GetFileName(filePath)}: {ex.Message}", ex);
+            // Release the file before the factory's repair-and-retry paths
+            // reopen it for an in-place fix (same cleanup as PowerPointHandler).
+            _doc?.Dispose();
+            _filteredPackageStream?.Dispose();
+            _backingStream?.Dispose();
+            if (ex is DocumentFormat.OpenXml.Packaging.OpenXmlPackageException)
+                throw new InvalidOperationException(
+                    $"Cannot open {Path.GetFileName(filePath)}: {ex.Message}", ex);
+            throw;
         }
     }
 
