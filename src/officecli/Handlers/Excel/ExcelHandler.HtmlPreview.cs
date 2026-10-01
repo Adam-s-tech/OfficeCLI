@@ -313,7 +313,6 @@ public partial class ExcelHandler
         return -1;
     }
 
-
     // ==================== Sheet Rendering ====================
 
     private void RenderSheetTable(StringBuilder sb, string sheetName, WorksheetPart worksheetPart, Stylesheet? stylesheet, RenderStyleArrays renderStyles,
