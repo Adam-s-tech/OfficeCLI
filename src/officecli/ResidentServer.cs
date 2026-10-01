@@ -1619,6 +1619,7 @@ public class ResidentServer : IDisposable
                 int pptGridCols = gridCols < 0
                     ? OfficeCli.Core.HtmlScreenshot.AutoGridColumns((pEnd ?? pptShotHandler.GetSlideCount()) - (pStart ?? 1) + 1, nativeW, nativeH)
                     : gridCols;
+                OfficeCli.Core.NativeRenderFailure? nativeFailure = null;
                 if (renderMode != "html" && OperatingSystem.IsWindows())
                 {
                     // A read-only handler holds only read access with FileShare.ReadWrite,
@@ -1639,10 +1640,10 @@ public class ResidentServer : IDisposable
                     try
                     {
                         directPng = pptGridCols > 0
-                            ? OfficeCli.Core.PowerPointPngBackend.RenderGrid(_filePath, ps, gEnd, gCellW, gCellH, pptGridCols, gGap, gPad)
-                            : OfficeCli.Core.PowerPointPngBackend.Render(_filePath, ps, pEnd ?? ps, exportW, exportH);
+                            ? OfficeCli.Core.PowerPointPngBackend.RenderGrid(_filePath, ps, gEnd, gCellW, gCellH, pptGridCols, gGap, gPad, out nativeFailure)
+                            : OfficeCli.Core.PowerPointPngBackend.Render(_filePath, ps, pEnd ?? ps, exportW, exportH, out nativeFailure);
                     }
-                    catch { directPng = null; }
+                    catch (Exception ex) { directPng = null; nativeFailure = OfficeCli.Core.NativeRenderFailure.FromException(ex); }
                     if (_editable)
                     {
                         _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
@@ -1650,10 +1651,7 @@ public class ResidentServer : IDisposable
                     }
                 }
                 if (renderMode == "native" && directPng == null)
-                {
-                    Console.Error.WriteLine("--render native requires Windows with Microsoft PowerPoint installed.");
-                    return;
-                }
+                    throw OfficeCli.Core.NativeRenderFailure.ToCliException("PowerPoint", nativeFailure);
                 if (directPng == null)
                 {
                     html = CommandBuilder.RenderViaRegistry(pptShotHandler, "pptx", new OfficeCli.Core.Rendering.RenderOptions
@@ -1697,11 +1695,12 @@ public class ResidentServer : IDisposable
                 // Native-first on Windows: release an editable write lock (blocks
                 // Word) before rendering, then reopen — same dance as the single-page
                 // branch below.
+                OfficeCli.Core.NativeRenderFailure? nativeFailure = null;
                 if (renderMode != "html" && OperatingSystem.IsWindows())
                 {
                     if (_editable) _handler.Dispose();
-                    try { directPng = OfficeCli.Core.WordPdfBackend.RenderGrid(_filePath, $"1-{gPageCount}", (int)Math.Round(gCellW), (int)Math.Round(gCellH), gCols, gGap, gPad); }
-                    catch { directPng = null; }
+                    try { directPng = OfficeCli.Core.WordPdfBackend.RenderGrid(_filePath, $"1-{gPageCount}", (int)Math.Round(gCellW), (int)Math.Round(gCellH), gCols, gGap, gPad, out nativeFailure); }
+                    catch (Exception ex) { directPng = null; nativeFailure = OfficeCli.Core.NativeRenderFailure.FromException(ex); }
                     if (_editable)
                     {
                         _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
@@ -1709,10 +1708,7 @@ public class ResidentServer : IDisposable
                     }
                 }
                 if (renderMode == "native" && directPng == null)
-                {
-                    Console.Error.WriteLine("--render native requires Windows with Microsoft Word installed.");
-                    return;
-                }
+                    throw OfficeCli.Core.NativeRenderFailure.ToCliException("Word", nativeFailure);
                 if (directPng == null)
                 {
                     html = CommandBuilder.RenderViaRegistry(wordShotGrid, "docx", new OfficeCli.Core.Rendering.RenderOptions
@@ -1726,6 +1722,7 @@ public class ResidentServer : IDisposable
                 var effectiveFilter = rangeArg != null
                     ? pageFilter
                     : (string.IsNullOrEmpty(pageFilter) ? "1" : pageFilter);
+                OfficeCli.Core.NativeRenderFailure? nativeFailure = null;
                 if (renderMode != "html" && OperatingSystem.IsWindows())
                 {
                     // See the pptx branch: only an editable handler must be released
@@ -1733,7 +1730,8 @@ public class ResidentServer : IDisposable
                     if (_editable) _handler.Dispose();
                     // effectiveFilter is only null under --range, which forces
                     // renderMode=html — this native branch is then unreachable.
-                    try { directPng = OfficeCli.Core.WordPdfBackend.Render(_filePath, effectiveFilter!); } catch { directPng = null; }
+                    try { directPng = OfficeCli.Core.WordPdfBackend.Render(_filePath, effectiveFilter!, out nativeFailure); }
+                    catch (Exception ex) { directPng = null; nativeFailure = OfficeCli.Core.NativeRenderFailure.FromException(ex); }
                     if (_editable)
                     {
                         _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
@@ -1741,10 +1739,7 @@ public class ResidentServer : IDisposable
                     }
                 }
                 if (renderMode == "native" && directPng == null)
-                {
-                    Console.Error.WriteLine("--render native requires Windows with Microsoft Word installed.");
-                    return;
-                }
+                    throw OfficeCli.Core.NativeRenderFailure.ToCliException("Word", nativeFailure);
                 if (directPng == null) html = CommandBuilder.RenderViaRegistry(wordShotHandler, "docx",
                     new OfficeCli.Core.Rendering.RenderOptions { PageFilter = effectiveFilter })!;
             }
